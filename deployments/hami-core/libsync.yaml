@@ -1,0 +1,61 @@
+# HAMi-core (libvgpu) distribution for KAI fractional GPU enforcement.
+# The KAI admission (hamicore plugin) injects the kai-hami-vgpu hostPath volume +
+# ld.so.preload mount into fractional pods; this DaemonSet places libvgpu.so and the
+# ld.so.preload file on each GPU node at /usr/local/vgpu. Deployed in the kai-scheduler
+# namespace (no separate resource-isolator webhook; device-plugin untouched).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kai-hami-ldpreload
+  namespace: kai-scheduler
+data:
+  ld.so.preload: |
+    /usr/local/vgpu/libvgpu.so
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kai-hami-libsync
+  namespace: kai-scheduler
+  labels:
+    app.kubernetes.io/component: kai-hami-libsync
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: kai-hami-libsync
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: kai-hami-libsync
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: libsync
+          image: howdi2000/kai-resource-isolator:v1.0.0-memlimit4
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              set -e
+              DST="/host-root/usr/local/vgpu"
+              mkdir -p "${DST}"
+              cp -f /artifacts/libvgpu.so "${DST}/libvgpu.so"
+              cp -f /config/ld.so.preload "${DST}/ld.so.preload"
+              chmod 0644 "${DST}/libvgpu.so" "${DST}/ld.so.preload"
+              echo "HAMi libvgpu synced to ${DST}"; ls -l "${DST}"
+              exec sleep infinity
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - {name: host-root, mountPath: /host-root, mountPropagation: Bidirectional}
+            - {name: ldpreload, mountPath: /config, readOnly: true}
+      volumes:
+        - name: host-root
+          hostPath: {path: /, type: Directory}
+        - name: ldpreload
+          configMap:
+            name: kai-hami-ldpreload
+            items:
+              - {key: ld.so.preload, path: ld.so.preload}

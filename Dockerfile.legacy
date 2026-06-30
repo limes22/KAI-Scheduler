@@ -1,0 +1,18 @@
+# Copyright 2025 NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
+# Legacy-builder-compatible single-stage image (no buildx/BuildKit, no --chmod).
+# Packages a pre-built binary (bin/$SERVICE_NAME-$TARGETARCH) into distroless.
+
+FROM nvcr.io/nvidia/distroless/go:v3.2.1
+ARG TARGETARCH
+ARG SERVICE_NAME
+ENV TARGETARCH=$TARGETARCH
+ENV SERVICE_NAME=$SERVICE_NAME
+
+WORKDIR /workspace
+COPY --chown=65532:0 bin/$SERVICE_NAME-$TARGETARCH app
+COPY --chown=65532:0 NOTICE .
+
+USER 65532:65532
+
+ENTRYPOINT ["/workspace/app"]
