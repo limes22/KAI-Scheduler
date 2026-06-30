@@ -26,11 +26,11 @@ func (p *HamiCore) Validate(_ *v1.Pod) error {
 	return nil
 }
 
-// Mutate injects the CUDA_DEVICE_MEMORY_LIMIT env var into the fractional GPU
-// container. The env var references the capabilities ConfigMap key that the
-// hamicore binder plugin populates at bind time. The ConfigMap itself and its
-// annotation are set up by the gpusharing admission plugin, so this plugin must
-// run after gpusharing.
+// Mutate injects the CUDA_DEVICE_MEMORY_LIMIT env var (and CUDA_DEVICE_SM_LIMIT when
+// a compute cap is requested) into the fractional GPU container. The env vars
+// reference the capabilities ConfigMap keys that the hamicore binder plugin
+// populates at bind time. The ConfigMap itself and its annotation are set up by the
+// gpusharing admission plugin, so this plugin must run after gpusharing.
 func (p *HamiCore) Mutate(pod *v1.Pod) error {
 	if len(pod.Spec.Containers) == 0 {
 		return nil
@@ -50,18 +50,31 @@ func (p *HamiCore) Mutate(pod *v1.Pod) error {
 		return err
 	}
 
-	common.AddEnvVarToContainer(containerRef.Container, v1.EnvVar{
-		Name: common.CudaDeviceMemoryLimit,
+	common.AddEnvVarToContainer(containerRef.Container,
+		capabilitiesConfigMapEnvVar(common.CudaDeviceMemoryLimit, capabilitiesConfigMapName))
+
+	if resources.RequestsGPUComputeLimit(pod) {
+		common.AddEnvVarToContainer(containerRef.Container,
+			capabilitiesConfigMapEnvVar(common.CudaDeviceSmLimit, capabilitiesConfigMapName))
+	}
+
+	return nil
+}
+
+// capabilitiesConfigMapEnvVar builds an env var whose value is read from the named
+// key of the capabilities ConfigMap, marked optional so the container still starts
+// if the binder has not populated the key (e.g. cap not resolvable at bind time).
+func capabilitiesConfigMapEnvVar(key, configMapName string) v1.EnvVar {
+	return v1.EnvVar{
+		Name: key,
 		ValueFrom: &v1.EnvVarSource{
 			ConfigMapKeyRef: &v1.ConfigMapKeySelector{
-				Key: common.CudaDeviceMemoryLimit,
+				Key: key,
 				LocalObjectReference: v1.LocalObjectReference{
-					Name: capabilitiesConfigMapName,
+					Name: configMapName,
 				},
 				Optional: ptr.To(true),
 			},
 		},
-	})
-
-	return nil
+	}
 }

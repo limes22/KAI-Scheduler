@@ -6,9 +6,12 @@ package constants
 import "time"
 
 const (
-	AppLabelName              = "app"
-	NvidiaGpuResource         = "nvidia.com/gpu"
-	NvidiaGpuMemory           = "nvidia.com/gpu.memory"
+	AppLabelName      = "app"
+	NvidiaGpuResource = "nvidia.com/gpu"
+	NvidiaGpuMemory   = "nvidia.com/gpu.memory"
+	// NvidiaGpuCores is the per-GPU SM/core count advertised on GPU nodes. Used as
+	// the basis to convert a core-count compute request into an SM-limit percentage.
+	NvidiaGpuCores            = "nvidia.com/gpu.cores"
 	GpuResource               = "gpu"
 	UnlimitedResourceQuantity = float64(-1)
 
@@ -35,11 +38,16 @@ const (
 	TopOwnerMetadataKey = "kai.scheduler/top-owner-metadata"
 
 	// Annotations
-	PodGroupAnnotationForPod      = "pod-group-name"
-	SkipPodGrouperAnnotation      = "kai.scheduler/skip-podgrouper"
-	GpuFraction                   = "gpu-fraction"
-	GpuFractionContainerName      = "gpu-fraction-container-name"
-	GpuMemory                     = "gpu-memory"
+	PodGroupAnnotationForPod = "pod-group-name"
+	SkipPodGrouperAnnotation = "kai.scheduler/skip-podgrouper"
+	GpuFraction              = "gpu-fraction"
+	GpuFractionContainerName = "gpu-fraction-container-name"
+	GpuMemory                = "gpu-memory"
+	// GpuSmPercentage caps GPU compute as a percentage (1-100) of a single GPU's SMs.
+	GpuSmPercentage = "gpu-sm-percentage"
+	// GpuSmCores caps GPU compute as an absolute SM/core count, converted to a
+	// percentage at bind time using the nvidia.com/gpu.cores node label.
+	GpuSmCores                    = "gpu-sm-cores"
 	ReceivedResourceType          = "received-resource-type"
 	GpuFractionsNumDevices        = "gpu-fraction-num-devices"
 	MpsAnnotation                 = "mps"

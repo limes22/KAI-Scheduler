@@ -24,6 +24,21 @@ func RequestsGPUFraction(pod *v1.Pod) bool {
 	return foundFraction || foundGPUMemory
 }
 
+// RequestsGPUComputeLimit reports whether the pod asks for a GPU compute (SM) cap,
+// via either the gpu-sm-percentage or the gpu-sm-cores annotation.
+func RequestsGPUComputeLimit(pod *v1.Pod) bool {
+	if pod.Annotations == nil {
+		return false
+	}
+	if v, found := pod.Annotations[constants.GpuSmPercentage]; found && v != "" {
+		return true
+	}
+	if v, found := pod.Annotations[constants.GpuSmCores]; found && v != "" {
+		return true
+	}
+	return false
+}
+
 func RequestsWholeGPU(pod *v1.Pod) bool {
 	for _, container := range pod.Spec.Containers {
 		if _, ok := container.Resources.Requests[constants.NvidiaGpuResource]; ok {
