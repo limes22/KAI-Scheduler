@@ -98,9 +98,13 @@ spec:
     {{- if hasKey .Values.binder "cdiEnabled" }}
     cdiEnabled: {{ .Values.binder.cdiEnabled }}
     {{- end }}
-    {{- if .Values.binder.plugins }}
+    {{- $binderPlugins := deepCopy (.Values.binder.plugins | default dict) }}
+    {{- if .Values.hamiCore.enabled }}
+    {{- $binderPlugins = merge $binderPlugins (dict "hamicore" (dict "enabled" true)) }}
+    {{- end }}
+    {{- if $binderPlugins }}
     plugins:
-      {{- toYaml .Values.binder.plugins | nindent 6 }}
+      {{- toYaml $binderPlugins | nindent 6 }}
     {{- end }}
 
   podGrouper:

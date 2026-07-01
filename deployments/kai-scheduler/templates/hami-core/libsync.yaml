@@ -1,0 +1,83 @@
+# Copyright 2026 NVIDIA CORPORATION
+# SPDX-License-Identifier: Apache-2.0
+#
+# HAMi-core (libvgpu) distribution for KAI fractional GPU enforcement.
+#
+# The KAI admission "hamicore" plugin injects the kai-hami-vgpu hostPath volume +
+# ld.so.preload mount into fractional pods, and the binder "hamicore" plugin writes
+# CUDA_DEVICE_MEMORY_LIMIT / CUDA_DEVICE_SM_LIMIT from the bound GPU portion. This
+# DaemonSet places libvgpu.so and the ld.so.preload file on each GPU node so those
+# caps are actually enforced. No separate resource-isolator webhook; the NVIDIA
+# device-plugin is left untouched.
+{{- if .Values.hamiCore.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kai-hami-ldpreload
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: kai-hami-libsync
+    app.kubernetes.io/part-of: kai-scheduler
+data:
+  ld.so.preload: |
+    {{ .Values.hamiCore.hostLibPath }}/libvgpu.so
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kai-hami-libsync
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: kai-hami-libsync
+    app.kubernetes.io/part-of: kai-scheduler
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: kai-hami-libsync
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: kai-hami-libsync
+    spec:
+      {{- with .Values.hamiCore.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hamiCore.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: libsync
+          image: "{{ .Values.hamiCore.image.repository }}/{{ .Values.hamiCore.image.name }}:{{ .Values.hamiCore.image.tag }}"
+          imagePullPolicy: {{ .Values.hamiCore.image.pullPolicy | default .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              DST="/host-root{{ .Values.hamiCore.hostLibPath }}"
+              mkdir -p "${DST}"
+              cp -f /artifacts/libvgpu.so "${DST}/libvgpu.so"
+              cp -f /config/ld.so.preload "${DST}/ld.so.preload"
+              chmod 0644 "${DST}/libvgpu.so" "${DST}/ld.so.preload"
+              echo "HAMi libvgpu synced to ${DST}"; ls -l "${DST}"
+              exec sleep infinity
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - {name: host-root, mountPath: /host-root, mountPropagation: Bidirectional}
+            - {name: ldpreload, mountPath: /config, readOnly: true}
+      volumes:
+        - name: host-root
+          hostPath: {path: /, type: Directory}
+        - name: ldpreload
+          configMap:
+            name: kai-hami-ldpreload
+            items:
+              - {key: ld.so.preload, path: ld.so.preload}
+{{- end }}

@@ -9,7 +9,9 @@ global:
   podSecurityContext: {}
   imagePullSecrets: [] # format: [{name: secret1}, {name: secret2}]
   leaderElection: false
-  gpuSharing: false
+  # gpuSharing enables fractional GPU scheduling (gpu-fraction / gpu-memory annotations).
+  # Required by the HAMi-core integration (hamiCore.enabled) below.
+  gpuSharing: true
   clusterAutoscaling: false
   nodeSelector: {}
   affinity: {}
@@ -268,3 +270,25 @@ defaultQueue:
       quota: 0
       limit: -1
       overQuotaWeight: 1
+
+# hamiCore controls the HAMi-core (libvgpu) integration that enforces per-container
+# GPU memory (CUDA_DEVICE_MEMORY_LIMIT) and SM/compute (CUDA_DEVICE_SM_LIMIT) caps for
+# fractional GPU pods. When enabled:
+#   - the "kai-hami-libsync" DaemonSet places libvgpu.so + ld.so.preload on GPU nodes,
+#   - the binder "hamicore" plugin is turned on (writes the CUDA caps at bind time).
+# Requires global.gpuSharing: true.
+hamiCore:
+  enabled: true
+  image:
+    # HAMi resource-isolator image carrying /artifacts/libvgpu.so.
+    repository: howdi2000
+    name: kai-resource-isolator
+    tag: v1.0.0-memlimit4
+    pullPolicy: IfNotPresent
+  # Host path on each GPU node where libvgpu.so + ld.so.preload are installed.
+  # Must match the path the admission/binder hamicore plugin mounts (/usr/local/vgpu).
+  hostLibPath: /usr/local/vgpu
+  # Only sync onto nodes labelled as having a GPU.
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations: []
